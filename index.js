@@ -3,6 +3,8 @@ const morgan = require('morgan')
 const app = express()
 
 const cors = require('cors')
+//para agregar elementos estaticos como HTML,CSS o JavaScript
+app.use(express.static('dist'))
 app.use(cors())
 
 
