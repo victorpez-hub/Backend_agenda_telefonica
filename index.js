@@ -1,35 +1,15 @@
+require('dotenv').config()
 const express = require('express')
 const morgan = require('morgan')
-const app = express()
-
 const cors = require('cors')
+const Person = require('./models/person')
+
+const app = express()
 //para agregar elementos estaticos como HTML,CSS o JavaScript
 app.use(express.static('dist'))
 app.use(cors())
 
 
-let agenda = [
-    {
-        "id": 1,
-        "name": "Arto Hellas",
-        "number": "040-123456"
-    },
-    {
-        "id": 2,
-        "name": "Ada Lovelace",
-        "number": "39-44-5323523"
-    },
-    {
-        "id": 3,
-        "name": "Dan Abramov",
-        "number": "12-43-234345"
-    },
-    {
-        "id": 4,
-        "name": "Mary Poppendieck",
-        "number": "39-23-6423122"
-    }
-]
 
 //Un middleware en Express es una función que se ejecuta durante el ciclo de vida de una petición HTTP antes de que la petición llegue a la ruta final o después de salir de ella. //* Sirve para procesar datos, modificar la petición o respuesta, registrar información, manejar errores, etc.
 
@@ -61,12 +41,12 @@ const requestLogger = (request, response, next) => {
 }
 app.use(requestLogger)
 */
-//************************************************************************ENDPOINTS************************************************************************
+//************************************************************************ENDPOINTS LOCALES************************************************************************
 
 app.get('/', (request, response) => {
     response.send('<h1>Agenda telefonica</h1>')
 })
-
+/*
 app.get('/api/persons', (request, response) => {
     response.json(agenda)
 })
@@ -105,12 +85,14 @@ En este caso junto al controlador del evento POST (app.post) definimos
 
 
 */
+/*
 app.post('/api/persons', morgan((tokens, req, res) => {
     return [
         tokens.url(req, res),
         tokens.status(req, res),
         JSON.stringify(req.body) // Muestra el body en el log
-    ].join(' | ')}),
+    ].join(' | ')
+}),
     (request, response) => {
         const maxId = agenda.length > 0
             ? Math.max(...agenda.map(n => n.id))
@@ -136,7 +118,99 @@ app.post('/api/persons', morgan((tokens, req, res) => {
 
         }
     })
+*/
+//************************************************************************ENDPOINTS LOCALES************************************************************************
+//++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ENDPOINTS MongoDB++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+// Como debo hacer la consulta a la base de datos, debo usar async para reflejar que esta funcion es asincrona
+app.get('/info', async (request, response) => {
+    const now = new Date()
+    try {
+        //Uso await para definir que debe esperara a que resuelta la consulta .estimatedDocumentCount()
+        const count = await Person.estimatedDocumentCount();
+        response.send(`<p>Hay ${count} contactos en la agenda<br>Consulta realizada ${new Date()}</p>`);
+    } catch {
+        response.status(500).send('Error al contar los contactos');
+    }
+})
 
+app.get('/api/persons', (request, response) => {
+    Person.find({}).then(person => {
+        response.json(person)
+    })
+})
+
+app.post('/api/persons', (request, response, next) => {
+    const body = request.body
+    if (body.name === undefined || body.number === undefined) {
+        return response.status(400).json({ error: 'content missing' })
+    }
+
+    const person = new Person({
+        name: body.name,
+        number: body.number
+    })
+    console.log('person', person)
+    person.save()
+        .then(savedPerson => {
+            response.json(savedPerson)
+        })
+        .catch(error => next(error))
+})
+/*
+En Express, next es una función que permite:
+    Ir al siguiente middleware si lo llamas sin argumentos.
+    Ir directamente al middleware de manejo de errores si lo llamas con un argumento (normalmente un objeto de error).
+*/
+app.get('/api/persons/:id', (request, response, next) => {
+    Person.findById(request.params.id).then(person => {
+        console.log('person', person)
+        if (person) {
+            response.json(person)
+        } else {
+            console.log('no encontrado')
+            response.status(404).end()
+        }
+    })
+        /*El manejo de error lo hago en el propio endpoint
+            .catch(error => {
+                console.log(error)
+                response.status(400).send({ error: 'malformatted id' })
+            })
+                */
+        //Recomendable para centralizar los manejos de errores si luego por ejemplo lo queremos monitorizar con sentry
+        //Ahora, Express busca un error handler, es decir, un middleware que acepte 4 argumentos (error, request, response, next).
+        .catch(error => next(error))
+})
+
+app.put('/api/persons/:id', (request, response, next) => {
+    console.log('body', request.body)
+    /*
+    const body = request.body
+    const person = {
+        name: body.name,
+        number: body.number
+    }*/
+    const { name, number } = request.body
+
+    //new: true: Devuelve el documento actualizado (por defecto devuelve el original antes de la actualización)
+    //runValidators: true — Hace que se apliquen las validaciones definidas en el esquema durante la actualización.
+    //context: 'query' — Útil para ciertas validaciones que dependen del contexto de la consulta.
+    Person.findByIdAndUpdate(request.params.id, { name, number }, { new: true, runValidators: true, context: 'query' })
+        .then(updatedPerson => {
+            response.json(updatedPerson)
+        })
+        .catch(error => next(error))
+})
+
+app.delete('/api/persons/:id', (request, response, next) => {
+    console.log('delete', request.params.id)
+    Person.findByIdAndDelete(request.params.id)
+        .then(result => {
+            response.status(204).end()
+        })
+        .catch(error => next(error))
+})
+//++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ENDPOINTS MongoDB++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 const unknownEndpoint = (request, response) => {
     response.status(404).json({ error: 'unknown endpoint' })
 }
@@ -147,9 +221,24 @@ app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`)
 })
 */
+const errorHandler = (error, request, response, next) => {
+    console.error(error.message)
 
+    if (error.name === 'CastError') {
+        console.log('CastError')
+        return response.status(400).send({ error: 'malformatted id' })
+    } else if (error.name === 'ValidationError') {
+        console.log('ValidationError')
+        return response.status(400).json({ error: error.message })
+    }
+
+    next(error)
+}
+
+// este debe ser el último middleware cargado, ¡también todas las rutas deben ser registrada antes que esto!
+app.use(errorHandler)
 //Ahora estamos utilizando el puerto definido en la variable de entorno PORT o el puerto 3001 si la variable de entorno PORT no está definida. Fly.io y Render configuran el puerto de la aplicación en función de esa variable de entorno
 const PORT = process.env.PORT || 3001
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`)
+    console.log(`Server running on port ${PORT}`)
 })
