@@ -32,9 +32,15 @@ const personSchema = new mongoose.Schema({
     number: {
         type: String,
         required: [true, 'El número es obligatorio'],
-        minlength: [9, 'El número debe tener al menos 9 caracteres']
+        validate: {
+            validator: function (v) {
+                // \d significa digitos del [0-9]. En este caso queremos 2 o 3 digitos del [0-9]
+                // function (v) es la funcion que hemos definido con 1 parametro que sera el numero pasado por formulario
+                // test(v) es una funcion predefinida por JavaScript para validar si dicha funcion es correcta. Devolvera true o false
+                return /^\d{2,3}-\d{5,}$/.test(v);
+            }
+        }
     }
-
 })
 
 personSchema.set('toJSON', {

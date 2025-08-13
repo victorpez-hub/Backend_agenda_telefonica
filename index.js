@@ -144,7 +144,6 @@ app.post('/api/persons', (request, response, next) => {
     if (body.name === undefined || body.number === undefined) {
         return response.status(400).json({ error: 'content missing' })
     }
-
     const person = new Person({
         name: body.name,
         number: body.number
@@ -222,16 +221,15 @@ app.listen(PORT, () => {
 })
 */
 const errorHandler = (error, request, response, next) => {
-    console.error(error.message)
+    console.error("Error: ", error.message)
 
     if (error.name === 'CastError') {
         console.log('CastError')
         return response.status(400).send({ error: 'malformatted id' })
     } else if (error.name === 'ValidationError') {
         console.log('ValidationError')
-        return response.status(400).json({ error: error.message })
+        return response.status(400).json({ error: 'No es un número válido: Debe ser de la forma 12-34567'})
     }
-
     next(error)
 }
 
